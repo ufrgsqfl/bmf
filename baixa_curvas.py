@@ -69,7 +69,7 @@ class bmf:
                 pass
         return pd.DataFrame({'taxas252':taxas252,'taxas360':taxas360}, index=dias)  
     
-class live_advfn():
+class live():
     def __init__(self, path='di1.txt', fut_ovrr=None):
         if fut_ovrr==None:
             f = open('di1.txt','r',encoding="utf8")
@@ -92,14 +92,14 @@ class live_advfn():
             soup = BeautifulSoup(page.content, 'html.parser')
             try:
                 if datetime.now().hour<18:
-                    bid = float(soup.find(id='quoteElementPiece16').text.replace(',','.'))
-                    ask = float(soup.find(id='quoteElementPiece17').text.replace(',','.'))
+                    bid = float(soup.find(id='quoteElementPiece16').text.replace(',','.'))/100
+                    ask = float(soup.find(id='quoteElementPiece17').text.replace(',','.'))/100
                 else:
-                    px_last = float(soup.find(id='quoteElementPiece10').text.replace(',','.'))
-                    px_max = float(soup.find(id='quoteElementPiece11').text.replace(',','.'))
-                    px_min = float(soup.find(id='quoteElementPiece12').text.replace(',','.'))
-                    px_open = float(soup.find(id='quoteElementPiece13').text.replace(',','.'))
-                    px_close = float(soup.find(id='quoteElementPiece14').text.replace(',','.'))
+                    px_last = float(soup.find(id='quoteElementPiece10').text.replace(',','.'))/100
+                    px_max = float(soup.find(id='quoteElementPiece11').text.replace(',','.'))/100
+                    px_min = float(soup.find(id='quoteElementPiece12').text.replace(',','.'))/100
+                    px_open = float(soup.find(id='quoteElementPiece13').text.replace(',','.'))/100
+                    px_close = float(soup.find(id='quoteElementPiece14').text.replace(',','.'))/100
                 tds = soup.find_all('td')
                 for i in range(len(tds)):
                     if tds[i].text[0:9]=='Futuro - ':
