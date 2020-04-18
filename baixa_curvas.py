@@ -228,15 +228,14 @@ class historico():
         with PoolExecutor(max_workers=16) as executor:
             for _ in executor.map(self._parse, self.urls):
                 if _ is not None:
-                    if _[0][0] not in datas:
-                        datas.extend(_[0])
-                        closes.extend(_[1])
-                        var.extend(_[2])
-                        var_perc.extend(_[3])
-                        op.extend(_[4])
-                        mx.extend(_[5])
-                        mn.extend(_[6])
-                        vol.extend(_[7])
+                    datas.extend(_[0])
+                    closes.extend(_[1])
+                    var.extend(_[2])
+                    var_perc.extend(_[3])
+                    op.extend(_[4])
+                    mx.extend(_[5])
+                    mn.extend(_[6])
+                    vol.extend(_[7])
 
         df = pd.DataFrame({'Fechamento':closes,
                            'Variação':var,
