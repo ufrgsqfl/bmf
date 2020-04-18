@@ -11,6 +11,7 @@ from datetime import date
 import requests
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor as PoolExecutor #Roda nos threads
+import time
 
 class bmf:
     def __init__(self, val_date):
@@ -149,3 +150,102 @@ class live():
                                       'Open':px_open,
                                       'Close':px_close},
                                       index=vcts)
+
+class historico():
+    """
+    Classe responsável por baixar os dados históricos do site advfn
+    """
+    def __init__(self, futuro, inicio=None, fim=None):
+        self.inicio = inicio
+        self.fim = fim
+        mes_ini = self.inicio.month
+        dia_ini = self.inicio.day
+        mes_fim = self.fim.month
+        dia_fim = self.fim.day
+        if self.inicio.month<10: mes_ini = '0'+str(self.inicio.month)
+        if self.inicio.day<10: dia_ini = '0'+str(self.inicio.day)
+        if self.fim.month<10: mes_fim = '0'+str(self.fim.month)
+        if self.fim.day<10: dia_fim = '0'+str(self.fim.day)
+        self.dt_barra_ini = f'{dia_ini}/{mes_ini}/{str(inicio.year)[-2:]}'
+        self.dt_barra_fim = f'{dia_fim}/{mes_fim}/{str(fim.year)[-2:]}'
+        self.futuro = futuro
+        self.headers = {"User-Agent":'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36'}
+        self.urls = [f'https://br.advfn.com/bolsa-de-valores/bmf/{self.futuro}/historico/mais-dados-historicos?current={x}&Date1={self.dt_barra_ini}&Date2={self.dt_barra_fim}'
+                     for x in range(6)]
+        self.start_time = time.time()
+    
+    def _datas(self,lista):
+        """
+        Converte o string de data em datetime.date
+        """
+        dts=[]
+        for data in lista:
+            dt = data.split(' ')
+            if dt[1]=='Jan': dts.append(date(int(dt[2]),1,int(dt[0])))
+            if dt[1]=='Fev': dts.append(date(int(dt[2]),2,int(dt[0])))
+            if dt[1]=='Mar': dts.append(date(int(dt[2]),3,int(dt[0])))
+            if dt[1]=='Abr': dts.append(date(int(dt[2]),4,int(dt[0])))
+            if dt[1]=='Mai': dts.append(date(int(dt[2]),5,int(dt[0])))
+            if dt[1]=='Jun': dts.append(date(int(dt[2]),6,int(dt[0])))
+            if dt[1]=='Jul': dts.append(date(int(dt[2]),7,int(dt[0])))
+            if dt[1]=='Ago': dts.append(date(int(dt[2]),8,int(dt[0])))
+            if dt[1]=='Set': dts.append(date(int(dt[2]),9,int(dt[0])))
+            if dt[1]=='Out': dts.append(date(int(dt[2]),10,int(dt[0])))
+            if dt[1]=='Nov': dts.append(date(int(dt[2]),11,int(dt[0])))
+            if dt[1]=='Dez': dts.append(date(int(dt[2]),12,int(dt[0])))
+        return dts
+    
+    def _parse(self,url):
+        """
+        Faz o parsing do link gerando uma matriz de resposta com todos os dados da página
+        """
+        datas,closes,var,var_perc,op,mx,mn,vol=[],[],[],[],[],[],[],[]
+        r = requests.get(url,headers=self.headers)
+        soup = BeautifulSoup(r.content, 'html.parser')
+        # texto = soup.find_all('tr',{'class':'result'})
+        texto = soup.find_all('table')[1].find_all('tr')
+        if len(texto)>1:
+            for i in range(1,len(texto)):
+                ft = texto[i].text.replace('.','').replace(',','.').split('\n')
+                datas.append(ft[1])
+                closes.append(float(ft[2]))
+                var.append(float(ft[3]))
+                var_perc.append(ft[4])
+                op.append(float(ft[5]))
+                mx.append(float(ft[6]))
+                mn.append(float(ft[7]))
+                vol.append(int(ft[8]))
+            
+            return(datas,closes,var,var_perc,op,mx,mn,vol)
+        else:
+            pass
+        
+    def relatorio(self):
+        """
+        Roda simultaneamente várias requisições oara gerar um dataframe com os dados da tabela
+        """
+        datas,closes,var,var_perc,op,mx,mn,vol=[],[],[],[],[],[],[],[]
+        with PoolExecutor(max_workers=16) as executor:
+            for _ in executor.map(self._parse, self.urls):
+                if _ is not None:
+                    if _[0][0] not in datas:
+                        datas.extend(_[0])
+                        closes.extend(_[1])
+                        var.extend(_[2])
+                        var_perc.extend(_[3])
+                        op.extend(_[4])
+                        mx.extend(_[5])
+                        mn.extend(_[6])
+                        vol.extend(_[7])
+
+        df = pd.DataFrame({'Fechamento':closes,
+                           'Variação':var,
+                           'Variação %':var_perc,
+                           'Abertura':op,
+                           'Máxima':mx,
+                           'Mínima':mn,
+                           'Volume':vol}, index=self._datas(datas))
+
+        elapsed_time = time.time() - self.start_time
+        print('Tempo de execução: ' + str(round(elapsed_time,4)) + 's')
+        return df.sort_index().drop_duplicates()
