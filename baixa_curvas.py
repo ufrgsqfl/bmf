@@ -2,6 +2,7 @@
 
 #===================================================================#
 # Desativa o aviso de request não seguro
+import contextlib
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 #===================================================================#
@@ -21,77 +22,74 @@ class bmf:
         self.val_date = val_date
         mes = self.val_date.month
         dia = self.val_date.day
-        if self.val_date.month<10: mes='0'+str(self.val_date.month)
-        if self.val_date.day<10: dia = '0'+str(self.val_date.day)
+        if self.val_date.month<10:
+            mes = f'0{str(self.val_date.month)}'
+        if self.val_date.day<10:
+            dia = f'0{str(self.val_date.day)}'
         self.dt_barra = f'{dia}/{mes}/{val_date.year}'
         self.dt_corrida = f'{val_date.year}{mes}{dia}'
         self.headers = {"User-Agent":'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36'}
-    
+
     def _baixa_cupom(self):
         """
         Dada a val_date baixa a curva de cupom limpo
         """
-        link = f'https://www2.bmf.com.br/pages/portal/bmfbovespa/boletim1/TxRef1.asp?Data={self.dt_barra}&Data1={self.dt_corrida}&slcTaxa=DOC'
-        page = requests.get(link, headers=self.headers, verify=False)
-        soup = BeautifulSoup(page.content, 'html.parser')
-        texto = soup.find_all('td')
+        texto = self.soup_site_bmf('&slcTaxa=DOC')
         dias, taxas = [], []
         tabelas = ["['tabelaConteudo1']", "['tabelaConteudo2']"]
         for i in range(len(texto)):
-            try:
+            with contextlib.suppress(Exception):
                 if str(texto[i]['class']) in tabelas:
                     tratado = texto[i].text.replace('\r\n','').replace(',','.').replace(' ','')
                     if i==0 or i%2==0:
                         dias.append(int(tratado))
                     else:
                         taxas.append(float(tratado)/100)
-            except:
-                pass
         return pd.DataFrame(data=taxas, index=dias, columns={'taxas360'})
-    
+
     def _baixa_pre(self):
         """
         Dada a val_date baixa a curva pré-di
         """
-        link = f'https://www2.bmf.com.br/pages/portal/bmfbovespa/boletim1/TxRef1.asp?Data={self.dt_barra}&Data1={self.dt_corrida}&slcTaxa=PRE'
-        page = requests.get(link, headers=self.headers, verify=False)
-        soup = BeautifulSoup(page.content, 'html.parser')
-        texto = soup.find_all('td')
+        texto = self.soup_site_bmf('&slcTaxa=PRE')
         dias, taxas252, taxas360 = [], [], []
         tabelas = ["['tabelaConteudo1']", "['tabelaConteudo2']"]
         for i in range(0,len(texto),3):
-            try:
-                if str(texto[i]['class']) in tabelas:
-                    if i<=len(texto)-2:
-                        dias.append(int(texto[i].text.replace('\r\n','').replace(',','.').replace(' ','')))
-                        taxas252.append(float(texto[i+1].text.replace('\r\n','').replace(',','.').replace(' ',''))/100)
-                        taxas360.append(float(texto[i+2].text.replace('\r\n','').replace(',','.').replace(' ',''))/100)
-            except:
-                pass
-        return pd.DataFrame({'taxas252':taxas252,'taxas360':taxas360}, index=dias)  
-    
+            with contextlib.suppress(Exception):
+                if str(texto[i]['class']) in tabelas and i <= len(texto) - 2:
+                    dias.append(int(texto[i].text.replace('\r\n','').replace(',','.').replace(' ','')))
+                    taxas252.append(float(texto[i+1].text.replace('\r\n','').replace(',','.').replace(' ',''))/100)
+                    taxas360.append(float(texto[i+2].text.replace('\r\n','').replace(',','.').replace(' ',''))/100)
+        return pd.DataFrame({'taxas252':taxas252,'taxas360':taxas360}, index=dias)
+
+    def soup_site_bmf(self, arg0):
+        link = f'https://www2.bmf.com.br/pages/portal/bmfbovespa/boletim1/TxRef1.asp?Data={self.dt_barra}&Data1={self.dt_corrida}{arg0}'
+
+        page = requests.get(link, headers=self.headers, verify=False)
+        soup = BeautifulSoup(page.content, 'html.parser')
+        return soup.find_all('td')
+
 class live():
     def __init__(self, path='di1.txt', fut_ovrr=None):
-        if fut_ovrr==None:
-            f = open('di1.txt','r',encoding="utf8")
-            futuros = f.readlines()
-            self.futuros=['DI1'+futuros[i].replace('\n','') for i in range(len(futuros))]
-            f.close()
+        if fut_ovrr is None:
+            with open('di1.txt','r',encoding="utf8") as f:
+                futuros = f.readlines()
+                self.futuros=['DI1'+futuros[i].replace('\n','') for i in range(len(futuros))]
         else:
             if type(fut_ovrr)==str: fut_ovrr=[fut_ovrr]
             self.futuros = list(fut_ovrr)
         self.urls = [f"https://br.advfn.com/bolsa-de-valores/bmf/{self.futuros[i]}/cotacao"
-                     for i in range(len(self.futuros))]
-        self.headers = {"User-Agent":'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36'}
-    
+                    for i in range(len(self.futuros))]
+        self.headers = {"User-Agent":'Mozilla/5.0 (Windows NT 10.0; Win64; x64)  AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36'}
+
     def _parse(self, url):
         """
         Faz o parsing da url para retirar os dados necessários
         """
-        try:
+        with contextlib.suppress(Exception):
             page = requests.get(url, headers=self.headers)
             soup = BeautifulSoup(page.content, 'html.parser')
-            try:
+            with contextlib.suppress(Exception):
                 if datetime.now().hour<18:
                     bid = float(soup.find(id='quoteElementPiece16').text.replace(',','.'))/100
                     ask = float(soup.find(id='quoteElementPiece17').text.replace(',','.'))/100
@@ -103,17 +101,13 @@ class live():
                     px_close = float(soup.find(id='quoteElementPiece14').text.replace(',','.'))/100
                 tds = soup.find_all('td')
                 for i in range(len(tds)):
-                    if tds[i].text[0:9]=='Futuro - ':
+                    if tds[i].text[:9] == 'Futuro - ':
                         spt = tds[i].text[-10:].split('/')
                         vencimento = date(int(spt[2]),int(spt[1]),int(spt[0]))
-                if datetime.now().hour<18: return [bid,ask,vencimento]
-                else: return [px_last,px_max,px_min,px_open,px_close,vencimento]
-            except:
-                pass
-        except:
-            pass
-    
+                return [bid, ask, vencimento] if datetime.now().hour < 18 else [px_last, px_max, px_min, px_open, px_close, vencimento]
+
     def baixa(self):
+        # sourcery skip: assign-if-exp, extract-duplicate-method, remove-redundant-slice-index
         """
         Baixa os dados live (caso a hora seja < 18horas) ou de fechamento
         """
@@ -134,22 +128,22 @@ class live():
                         px_open.append(_[3])
                         px_close.append(_[4])
                         vcts.append(_[5])
-            
+
             if datetime.now().hour<18:
                 return pd.DataFrame({'Futuro':self.futuros[0:len(bid)],
-                                     'Bid':bid,
+                                    'Bid':bid,
                                     'Ask':ask,
                                     'Mid':mid},
                                     index=vcts)
-            
+
             else:
                 return pd.DataFrame({'Futuro':self.futuros[0:len(px_last)],
-                                      'Last':px_last,
-                                      'Max':px_max,
-                                      'Min':px_min,
-                                      'Open':px_open,
-                                      'Close':px_close},
-                                      index=vcts)
+                                        'Last':px_last,
+                                        'Max':px_max,
+                                        'Min':px_min,
+                                        'Open':px_open,
+                                        'Close':px_close},
+                                        index=vcts)
 
 class historico():
     """
@@ -162,18 +156,22 @@ class historico():
         dia_ini = self.inicio.day
         mes_fim = self.fim.month
         dia_fim = self.fim.day
-        if self.inicio.month<10: mes_ini = '0'+str(self.inicio.month)
-        if self.inicio.day<10: dia_ini = '0'+str(self.inicio.day)
-        if self.fim.month<10: mes_fim = '0'+str(self.fim.month)
-        if self.fim.day<10: dia_fim = '0'+str(self.fim.day)
+        if self.inicio.month<10:
+            mes_ini = f'0{str(self.inicio.month)}'
+        if self.inicio.day<10:
+            dia_ini = f'0{str(self.inicio.day)}'
+        if self.fim.month<10:
+            mes_fim = f'0{str(self.fim.month)}'
+        if self.fim.day<10:
+            dia_fim = f'0{str(self.fim.day)}'
         self.dt_barra_ini = f'{dia_ini}/{mes_ini}/{str(inicio.year)[-2:]}'
         self.dt_barra_fim = f'{dia_fim}/{mes_fim}/{str(fim.year)[-2:]}'
         self.futuro = futuro
         self.headers = {"User-Agent":'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36'}
         self.urls = [f'https://br.advfn.com/bolsa-de-valores/bmf/{self.futuro}/historico/mais-dados-historicos?current={x}&Date1={self.dt_barra_ini}&Date2={self.dt_barra_fim}'
-                     for x in range(6)]
+                    for x in range(6)]
         self.start_time = time.time()
-    
+
     def _datas(self,lista):
         """
         Converte o string de data em datetime.date
@@ -199,12 +197,12 @@ class historico():
         """
         Faz o parsing do link gerando uma matriz de resposta com todos os dados da página
         """
-        datas,closes,var,var_perc,op,mx,mn,vol=[],[],[],[],[],[],[],[]
         r = requests.get(url,headers=self.headers)
         soup = BeautifulSoup(r.content, 'html.parser')
         # texto = soup.find_all('tr',{'class':'result'})
         texto = soup.find_all('table')[1].find_all('tr')
         if len(texto)>1:
+            datas,closes,var,var_perc,op,mx,mn,vol=[],[],[],[],[],[],[],[]
             for i in range(1,len(texto)):
                 ft = texto[i].text.replace('.','').replace(',','.').split('\n')
                 datas.append(ft[1])
@@ -215,11 +213,9 @@ class historico():
                 mx.append(float(ft[6]))
                 mn.append(float(ft[7]))
                 vol.append(int(ft[8]))
-            
+
             return(datas,closes,var,var_perc,op,mx,mn,vol)
-        else:
-            pass
-        
+
     def relatorio(self):
         """
         Roda simultaneamente várias requisições oara gerar um dataframe com os dados da tabela
@@ -246,5 +242,5 @@ class historico():
                            'Volume':vol}, index=self._datas(datas))
 
         elapsed_time = time.time() - self.start_time
-        print('Tempo de execução: ' + str(round(elapsed_time,4)) + 's')
+        print(f'Tempo de execução: {str(round(elapsed_time,4))}s')
         return df.sort_index().drop_duplicates()
