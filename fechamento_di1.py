@@ -44,10 +44,11 @@ class fechamento:
                 elif x in [0,14]:
                     tmp.append(t)
             qbs_t.append(tmp)
-        
+
         spt = data.split('/')
         data_spt = date(int(spt[2]),int(spt[1]),int(spt[0]))
-        df=pd.DataFrame(data=qbs_t,columns=colunas, index=[data_spt for i in range(len(qbs_t))])
+        df = pd.DataFrame(data=qbs_t, columns=colunas, index=[data_spt for _ in range(len(qbs_t))])
+
         dt_spt = data.replace('/','-').split('-')
         dt_arq = dt_spt[2]+'-'+dt_spt[1]+'-'+dt_spt[0]
         if export==True: df.to_csv(f'{self.path}DI1 {dt_arq}.csv')

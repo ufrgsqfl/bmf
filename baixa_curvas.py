@@ -192,7 +192,7 @@ class historico():
             if dt[1]=='Nov': dts.append(date(int(dt[2]),11,int(dt[0])))
             if dt[1]=='Dez': dts.append(date(int(dt[2]),12,int(dt[0])))
         return dts
-    
+
     def _parse(self,url):
         """
         Faz o parsing do link gerando uma matriz de resposta com todos os dados da página
